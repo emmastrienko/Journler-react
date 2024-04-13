@@ -30,12 +30,24 @@ function App() {
   // the default value of journlerMode state can be set to 'editor' to start the app in edit mode
   const [journalId, setJournalId] = React.useState(null);
   const [date, setDate] = React.useState("");
-  const [journalDate, setJournalDate] = React.useState("");
+  const [journalDate, setJournalDate] = React.useState(todaysDate);
   const [mood, setMood] = React.useState("");
   const [title, setTitle] = React.useState("");
   const [writeup, setWriteup] = React.useState("");
   const [journalCollection, setJournalCollection] = React.useState([]);
   const [journlerMode, setJournlerMode] = React.useState("editor");
+
+  React.useEffect(() => {
+    async function fetchJournals() {
+      try {
+        await axios.get(journlerURL);
+      } catch (error) {
+        console.error("Error fetching journals:", error);
+      }
+    }
+
+    fetchJournals();
+  }, []);
 
   // define event handler function onTitleChanged() to update title state
   function onTitleChanged(e) {
@@ -72,27 +84,32 @@ function App() {
     event.preventDefault();
 
     const journalData = {
-      id: journalId,
-      date: date,
-      mood: mood,
+      id: journalId || Date.now(),
+      date: todaysDate,
       title: title,
       writeup: writeup,
+      mood: mood,
     };
 
-    try {
-      const response = await axios.post(`${journlerURL}`, journalData);
-      console.log("Journal saved successfully to server:", response.data);
+    console.log(journalData);
 
-      setJournalCollection([...journalCollection, response.data]); 
-    } catch (err) {
-      console.error("Error saving journal to server:", err);
-      
+    try {
+      await axios.post(journlerURL, journalData);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      //after the trycatch and only after this block must execute
+      setJournalCollection((prevJournalCollection) => {
+        const updatedCollection = [...prevJournalCollection, journalData];
+        return updatedCollection;
+      });
+      console.log(journalCollection);
     }
   }
 
   // define function to filter journalCollection() by mood value provide
   function getMoodStats(mood) {
-    const filteredByMoods = journalCollection.filter(
+    const filteredByMoods = journalCollection.find(
       (journal) => journal.mood === mood
     );
     return filteredByMoods;
@@ -100,31 +117,24 @@ function App() {
 
   // define event handler function cancel() to cancel requested save operation
   function cancel() {
-    setJournalId(null);
-    setDate("");
-    setJournalDate("");
     setMood("");
     setTitle("");
     setWriteup("");
-    setJournalCollection([]);
-    setJournlerMode("editor");
   }
 
   // define event handler function deleteJournal() to delete journal by the id provided
   // make server api call using axios to perform delete operation
   // post delete, update journalCollection state to remove deleted journal item
-  function deleteJournal(id) {
-    axios
-      .delete(`${journlerURL}/${id}`)
-      .then(() => {
-        const updateJournalCollection = journalCollection.filter(
-          (journal) => journal.id != id
-        );
-        setJournalCollection(updateJournalCollection);
-      })
-      .catch((error) => {
-        console.log("Error deleting journal entry: ", error);
-      });
+  async function deleteJournal(id) {
+    try {
+      await axios.delete(`${journlerURL}/${id}`);
+    } catch (error) {
+      console.log("Error deleting journal entry: ", error);
+    }
+    const updateJournalCollection = journalCollection.filter(
+      (journal) => journal.id != id
+    );
+    setJournalCollection(updateJournalCollection);
   }
 
   // define event handler function editJournal() to set the journlerMode to 'editor'
@@ -139,7 +149,6 @@ function App() {
       setMood(journalToEdit.mood);
       setTitle(journalToEdit.title);
       setWriteup(journalToEdit.writeup);
-      setJournalCollection(journalToEdit.journalCollection);
       setJournlerMode("editor");
     }
   }
